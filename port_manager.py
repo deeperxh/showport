@@ -1,5 +1,5 @@
 """
-Port Manager - Windows 端口可视化管理工具
+ShowPort - Windows 端口可视化管理工具
 一个本地桌面应用，查看端口占用、搜索过滤、一键Kill进程。
 """
 
@@ -87,33 +87,38 @@ def get_connections():
     return results
 
 
-def kill_process(pid):
+def kill_process(pid, lang='zh'):
     """终止指定PID的进程"""
+    en = lang == 'en'
     try:
         pid = int(pid)
         if pid <= 0:
-            return {'success': False, 'message': '无效的 PID'}
+            return {'success': False, 'message': 'Invalid PID' if en else '无效的 PID'}
         if pid == os.getpid():
-            return {'success': False, 'message': '不能终止自身进程'}
+            return {'success': False, 'message': 'Cannot kill self' if en else '不能终止自身进程'}
         proc = psutil.Process(pid)
         proc_name = proc.name()
         proc.kill()
         proc.wait(timeout=3)
-        return {'success': True, 'message': f'已终止进程 {proc_name} (PID: {pid})'}
+        msg = f'Killed {proc_name} (PID: {pid})' if en else f'已终止进程 {proc_name} (PID: {pid})'
+        return {'success': True, 'message': msg}
     except psutil.NoSuchProcess:
-        return {'success': False, 'message': f'进程 {pid} 不存在'}
+        msg = f'Process {pid} not found' if en else f'进程 {pid} 不存在'
+        return {'success': False, 'message': msg}
     except psutil.AccessDenied:
-        # 降级用 taskkill
         try:
             subprocess.check_output(
                 ['taskkill', '/F', '/PID', str(pid)],
                 encoding='gbk', errors='replace'
             )
-            return {'success': True, 'message': f'已终止进程 (PID: {pid})'}
+            msg = f'Killed process (PID: {pid})' if en else f'已终止进程 (PID: {pid})'
+            return {'success': True, 'message': msg}
         except Exception:
-            return {'success': False, 'message': f'无权限终止进程 {pid}，请以管理员身份运行'}
+            msg = f'Access denied for PID {pid}, run as admin' if en else f'无权限终止进程 {pid}，请以管理员身份运行'
+            return {'success': False, 'message': msg}
     except Exception as e:
-        return {'success': False, 'message': f'终止失败: {str(e)}'}
+        msg = f'Kill failed: {str(e)}' if en else f'终止失败: {str(e)}'
+        return {'success': False, 'message': msg}
 
 
 class Api:
@@ -122,8 +127,8 @@ class Api:
     def get_ports(self):
         return get_connections()
 
-    def kill_pid(self, pid):
-        return kill_process(pid)
+    def kill_pid(self, pid, lang='zh'):
+        return kill_process(pid, lang)
 
 
 HTML = r"""
@@ -131,7 +136,7 @@ HTML = r"""
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Port Manager</title>
+<title>ShowPort</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
 
@@ -583,6 +588,21 @@ HTML = r"""
     border-radius: 2px;
     padding: 0 2px;
   }
+
+  .lang-btn {
+    padding: 5px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+  }
+  .lang-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 </style>
 </head>
 <body>
@@ -594,7 +614,7 @@ HTML = r"""
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
-      <span>PORT MANAGER</span>
+      <span>SHOW PORT</span>
     </div>
 
     <div class="search-box">
@@ -610,20 +630,21 @@ HTML = r"""
           <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>
-        刷新
+        <span id="labelRefresh">刷新</span>
       </button>
       <div class="auto-refresh">
         <input type="checkbox" class="toggle" id="autoRefreshToggle" />
-        <label for="autoRefreshToggle" style="cursor:pointer;">自动刷新</label>
+        <label for="autoRefreshToggle" id="labelAutoRefresh" style="cursor:pointer;">自动刷新</label>
       </div>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
     </div>
   </div>
 
   <div class="stats-bar">
-    <div class="stat stat-total"><span class="dot"></span>总计 <span class="stat-val" id="statTotal">0</span></div>
+    <div class="stat stat-total"><span class="dot"></span><span id="labelTotal">总计</span> <span class="stat-val" id="statTotal">0</span></div>
     <div class="stat stat-listening"><span class="dot"></span>LISTEN <span class="stat-val" id="statListening">0</span></div>
     <div class="stat stat-established"><span class="dot"></span>ESTABLISHED <span class="stat-val" id="statEstablished">0</span></div>
-    <div class="stat stat-other"><span class="dot"></span>其他 <span class="stat-val" id="statOther">0</span></div>
+    <div class="stat stat-other"><span class="dot"></span><span id="labelOther">其他</span> <span class="stat-val" id="statOther">0</span></div>
     <div style="margin-left:auto;" id="lastRefresh"></div>
   </div>
 
@@ -631,15 +652,15 @@ HTML = r"""
     <table>
       <thead>
         <tr>
-          <th data-col="proto" data-type="str">协议 <span class="sort-arrow"></span></th>
-          <th data-col="localAddr" data-type="str">本地地址 <span class="sort-arrow"></span></th>
-          <th data-col="localPort" data-type="num">本地端口 <span class="sort-arrow"></span></th>
-          <th data-col="remoteAddr" data-type="str">远程地址 <span class="sort-arrow"></span></th>
-          <th data-col="remotePort" data-type="num">远程端口 <span class="sort-arrow"></span></th>
-          <th data-col="status" data-type="str">状态 <span class="sort-arrow"></span></th>
-          <th data-col="pid" data-type="num">PID <span class="sort-arrow"></span></th>
-          <th data-col="procName" data-type="str">进程名 <span class="sort-arrow"></span></th>
-          <th>操作</th>
+          <th data-col="proto" data-type="str"><span class="th-label">协议</span> <span class="sort-arrow"></span></th>
+          <th data-col="localAddr" data-type="str"><span class="th-label">本地地址</span> <span class="sort-arrow"></span></th>
+          <th data-col="localPort" data-type="num"><span class="th-label">本地端口</span> <span class="sort-arrow"></span></th>
+          <th data-col="remoteAddr" data-type="str"><span class="th-label">远程地址</span> <span class="sort-arrow"></span></th>
+          <th data-col="remotePort" data-type="num"><span class="th-label">远程端口</span> <span class="sort-arrow"></span></th>
+          <th data-col="status" data-type="str"><span class="th-label">状态</span> <span class="sort-arrow"></span></th>
+          <th data-col="pid" data-type="num"><span class="th-label">PID</span> <span class="sort-arrow"></span></th>
+          <th data-col="procName" data-type="str"><span class="th-label">进程名</span> <span class="sort-arrow"></span></th>
+          <th><span class="th-label">操作</span></th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -651,28 +672,97 @@ HTML = r"""
 
 <div class="modal-overlay" id="killModal">
   <div class="modal">
-    <h3>确认终止进程</h3>
+    <h3 id="modalTitle">确认终止进程</h3>
     <p id="killModalMsg"></p>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeKillModal()">取消</button>
+      <button class="btn-cancel" id="btnCancel" onclick="closeKillModal()">取消</button>
       <button class="btn-confirm-kill" id="btnConfirmKill">终止进程</button>
     </div>
   </div>
 </div>
 
 <script>
+  const i18n = {
+    zh: {
+      search: '搜索端口、PID、进程名 ...',
+      refresh: '刷新',
+      autoRefresh: '自动刷新',
+      total: '总计',
+      other: '其他',
+      th: ['协议','本地地址','本地端口','远程地址','远程端口','状态','PID','进程名','操作'],
+      modalTitle: '确认终止进程',
+      modalMsg: (name, pid) => '确定要终止进程 <strong>'+name+'</strong> (PID: <strong>'+pid+'</strong>) 吗？',
+      cancel: '取消',
+      confirmKill: '终止进程',
+      updatedAt: t => '更新于 ' + t,
+      fetchError: e => '获取数据失败: ' + e,
+      autoOn: '已开启自动刷新 (3秒)',
+      autoOff: '已关闭自动刷新',
+      opError: e => '操作失败: ' + e,
+      noMatch: t => '没有匹配 "' + t + '" 的结果',
+      noConn: '没有活动连接',
+      langBtn: 'EN',
+    },
+    en: {
+      search: 'Search port, PID, process ...',
+      refresh: 'Refresh',
+      autoRefresh: 'Auto refresh',
+      total: 'Total',
+      other: 'Other',
+      th: ['Proto','Local Addr','Local Port','Remote Addr','Remote Port','Status','PID','Process','Action'],
+      modalTitle: 'Confirm Kill Process',
+      modalMsg: (name, pid) => 'Kill process <strong>'+name+'</strong> (PID: <strong>'+pid+'</strong>) ?',
+      cancel: 'Cancel',
+      confirmKill: 'Kill',
+      updatedAt: t => 'Updated ' + t,
+      fetchError: e => 'Fetch failed: ' + e,
+      autoOn: 'Auto refresh on (3s)',
+      autoOff: 'Auto refresh off',
+      opError: e => 'Operation failed: ' + e,
+      noMatch: t => 'No results for "' + t + '"',
+      noConn: 'No active connections',
+      langBtn: '中文',
+    }
+  };
+
+  let lang = 'zh';
+  try { lang = localStorage.getItem('showport-lang') || 'zh'; } catch(e) {}
   let allData = [];
   let sortCol = 'localPort';
   let sortDir = 'asc';
   let autoRefreshTimer = null;
   let pendingKillPid = null;
 
+  function t(key) { return i18n[lang][key]; }
+
+  function applyLang() {
+    const L = i18n[lang];
+    document.getElementById('searchInput').placeholder = L.search;
+    document.getElementById('labelRefresh').textContent = L.refresh;
+    document.getElementById('labelAutoRefresh').textContent = L.autoRefresh;
+    document.getElementById('labelTotal').textContent = L.total;
+    document.getElementById('labelOther').textContent = L.other;
+    document.getElementById('modalTitle').textContent = L.modalTitle;
+    document.getElementById('btnCancel').textContent = L.cancel;
+    document.getElementById('btnConfirmKill').textContent = L.confirmKill;
+    document.getElementById('langBtn').textContent = L.langBtn;
+    document.querySelectorAll('.th-label').forEach((el, i) => { el.textContent = L.th[i]; });
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  }
+
+  function toggleLang() {
+    lang = lang === 'zh' ? 'en' : 'zh';
+    try { localStorage.setItem('showport-lang', lang); } catch(e) {}
+    applyLang();
+    renderTable();
+  }
+
   async function fetchPorts() {
     return await window.pywebview.api.get_ports();
   }
 
   async function killPid(pid) {
-    return await window.pywebview.api.kill_pid(pid);
+    return await window.pywebview.api.kill_pid(pid, lang);
   }
 
   function showToast(msg, type) {
@@ -690,9 +780,9 @@ HTML = r"""
       allData = await fetchPorts();
       renderTable();
       updateStats();
-      document.getElementById('lastRefresh').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+      document.getElementById('lastRefresh').textContent = t('updatedAt')(new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en'));
     } catch (e) {
-      showToast('获取数据失败: ' + e, 'error');
+      showToast(t('fetchError')(e), 'error');
     } finally {
       document.getElementById('loadingBar').classList.remove('active');
     }
@@ -744,7 +834,7 @@ HTML = r"""
     let data = sortData(getFilteredData());
 
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><p>' + (term ? '没有匹配 "' + esc(term) + '" 的结果' : '没有活动连接') + '</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><p>' + (term ? t('noMatch')(esc(term)) : t('noConn')) + '</p></div></td></tr>';
       updateStats();
       return;
     }
@@ -769,7 +859,7 @@ HTML = r"""
 
   function confirmKill(pid, name) {
     pendingKillPid = pid;
-    document.getElementById('killModalMsg').innerHTML = '确定要终止进程 <strong>'+esc(name)+'</strong> (PID: <strong>'+pid+'</strong>) 吗？';
+    document.getElementById('killModalMsg').innerHTML = t('modalMsg')(esc(name), pid);
     document.getElementById('killModal').classList.add('active');
   }
 
@@ -786,7 +876,7 @@ HTML = r"""
       const r = await killPid(pid);
       showToast(r.message, r.success ? 'success' : 'error');
       if (r.success) setTimeout(refreshData, 500);
-    } catch (e) { showToast('操作失败: '+e, 'error'); }
+    } catch (e) { showToast(t('opError')(e), 'error'); }
   });
 
   document.querySelectorAll('th[data-col]').forEach(th => {
@@ -806,10 +896,10 @@ HTML = r"""
   document.getElementById('autoRefreshToggle').addEventListener('change', e => {
     if (e.target.checked) {
       autoRefreshTimer = setInterval(refreshData, 3000);
-      showToast('已开启自动刷新 (3秒)', 'info');
+      showToast(t('autoOn'), 'info');
     } else {
       clearInterval(autoRefreshTimer);
-      showToast('已关闭自动刷新', 'info');
+      showToast(t('autoOff'), 'info');
     }
   });
 
@@ -822,7 +912,7 @@ HTML = r"""
     }
   });
 
-  window.addEventListener('pywebviewready', refreshData);
+  window.addEventListener('pywebviewready', function() { applyLang(); refreshData(); });
 </script>
 </body>
 </html>
@@ -832,7 +922,7 @@ HTML = r"""
 def main():
     api = Api()
     window = webview.create_window(
-        'Port Manager',
+        'ShowPort',
         html=HTML,
         js_api=api,
         width=1100,

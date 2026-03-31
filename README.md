@@ -1,52 +1,125 @@
-# Port Manager
+# ShowPort
 
-Windows 端口可视化管理工具。替代 `netstat + findstr + taskkill` 命令行操作，提供图形界面查看端口占用、搜索过滤、一键终止进程。
+[English](#english) | [中文](#中文)
 
-![light-theme](https://img.shields.io/badge/theme-light-blue) ![python](https://img.shields.io/badge/python-3.8+-green) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+---
 
-## 功能
+## English
 
-- **端口列表** — 显示所有 TCP/UDP 连接（协议、地址、端口、状态、PID、进程名）
-- **实时搜索** — 输入端口号、PID 或进程名即时过滤，搜索关键字高亮
-- **列排序** — 点击表头按任意列排序
-- **一键 Kill** — 每行 Kill 按钮，带确认弹窗，终止占用端口的进程
-- **自动刷新** — 可开启 3 秒自动刷新
-- **快捷键** — `Ctrl+R` 刷新，`Ctrl+F` 聚焦搜索，`Esc` 清空搜索
+> Tired of typing `netstat -ano | findstr` every time you need to check a port on Windows? This GUI tool lets you see all ports at a glance and kill any process with one click.
 
-## 快速开始
+> Supports **English / Chinese** toggle in-app.
 
-### 方式一：直接运行 Python 脚本
+![ShowPort UI](screenshots/main.png)
+
+### Download
+
+**No Python needed. Just download the exe and double-click.**
+
+#### [>>> Download ShowPort.exe <<<](https://github.com/deeperxh/showport/releases/latest/download/ShowPort.exe)
+
+> Killing processes requires admin privileges. Right-click → **Run as administrator**.
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| Port List | All TCP/UDP connections — protocol, address, port, status, PID, process name |
+| Search | Filter by port, PID, or process name in real time with keyword highlighting |
+| Sort | Click any column header to sort ascending/descending |
+| Kill | Kill button on each row with a confirmation dialog |
+| Auto Refresh | Toggle 3-second auto refresh in the toolbar |
+| Stats | Total, LISTEN, ESTABLISHED counts at the top |
+| i18n | Switch between Chinese and English via the toolbar button |
+
+### Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+R` / `F5` | Refresh |
+| `Ctrl+F` | Focus search |
+| `Esc` | Clear search |
+
+### Run from Source
 
 ```bash
-# 安装依赖
+git clone https://github.com/deeperxh/showport.git
+cd showport
 pip install -r requirements.txt
-
-# 启动
 python port_manager.py
 ```
 
-### 方式二：使用打包好的 .exe
-
-下载 `dist/PortManager.exe`，双击运行即可，无需 Python 环境。
-
-> Kill 进程需要权限，建议右键「以管理员身份运行」。
-
-## 打包 .exe
+### Build exe
 
 ```bash
-# 安装打包工具
 pip install pyinstaller
-
-# 打包为单文件 exe（带图标）
-pyinstaller --onefile --windowed --name PortManager --icon=icon.ico port_manager.py
+pyinstaller --onefile --windowed --name ShowPort --icon=icon.ico port_manager.py
 ```
 
-生成的 `.exe` 在 `dist/PortManager.exe`。
+### Tech Stack
 
-## 技术栈
+Python + pywebview (Edge WebView2) + psutil + PyInstaller
 
-- **Python** — 后端逻辑
-- **pywebview** — 原生桌面窗口（基于 Edge WebView2）
-- **netstat** — 获取端口连接数据
-- **psutil** — 获取进程名、终止进程
-- **PyInstaller** — 打包为 .exe
+---
+
+## 中文
+
+> Windows 上查端口占用每次都要敲 `netstat -ano | findstr`，记不住还费劲。做了个图形界面，双击打开就能看，想杀哪个进程点一下就行。
+
+> 支持应用内**中英文切换**。
+
+![ShowPort 界面](screenshots/main.png)
+
+### 下载使用
+
+**不需要安装 Python，不需要任何环境，下载 exe 双击就能用。**
+
+#### [>>> 点击下载 ShowPort.exe <<<](https://github.com/deeperxh/showport/releases/latest/download/ShowPort.exe)
+
+> 杀进程需要管理员权限，建议**右键 → 以管理员身份运行**。
+
+### 功能一览
+
+| 功能 | 说明 |
+|------|------|
+| 端口列表 | 显示所有 TCP/UDP 连接，包括协议、地址、端口、状态、PID、进程名 |
+| 实时搜索 | 输入端口号、PID 或进程名，即时过滤，关键字高亮显示 |
+| 列排序 | 点击表头，按任意列升序/降序排列 |
+| 一键 Kill | 每行都有 Kill 按钮，点击后弹出确认框，确认后终止进程 |
+| 自动刷新 | 工具栏可开启 3 秒自动刷新，实时监控端口变化 |
+| 统计概览 | 顶部显示连接总数、LISTEN 数、ESTABLISHED 数 |
+| 中英文切换 | 工具栏按钮一键切换中英文界面 |
+
+### 快捷键
+
+| 按键 | 功能 |
+|------|------|
+| `Ctrl+R` / `F5` | 刷新列表 |
+| `Ctrl+F` | 聚焦搜索框 |
+| `Esc` | 清空搜索 |
+
+### 从源码运行
+
+```bash
+git clone https://github.com/deeperxh/showport.git
+cd showport
+pip install -r requirements.txt
+python port_manager.py
+```
+
+### 自己打包 exe
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --windowed --name ShowPort --icon=icon.ico port_manager.py
+```
+
+### 技术栈
+
+Python + pywebview (Edge WebView2) + psutil + PyInstaller
+
+---
+
+## License
+
+MIT
