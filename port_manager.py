@@ -16,7 +16,7 @@ import psutil
 import webview
 
 
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.4.0"
 GITHUB_REPO = "deeperxh/showport"
 
 
@@ -224,6 +224,9 @@ class Api:
 
     def set_window(self, window):
         self._window = window
+
+    def get_version(self):
+        return CURRENT_VERSION
 
     def get_ports(self):
         return get_connections()
@@ -916,7 +919,7 @@ HTML = r"""
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
-      <span>SHOW PORT</span>
+      <span>SHOW PORT</span><span id="versionLabel" style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:2px;"></span>
     </div>
 
     <div class="search-box">
@@ -1341,8 +1344,13 @@ HTML = r"""
     document.getElementById('updateBanner').classList.remove('active');
   }
 
-  window.addEventListener('pywebviewready', function() {
+  window.addEventListener('pywebviewready', async function() {
     applyTheme(); applyLang(); refreshData(); checkUpdate();
+    // 显示版本号
+    try {
+      const ver = await window.pywebview.api.get_version();
+      document.getElementById('versionLabel').textContent = 'v' + ver;
+    } catch(e) {}
     // 每 30 分钟检查一次更新
     updateCheckTimer = setInterval(checkUpdate, 30 * 60 * 1000);
   });
