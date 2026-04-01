@@ -6,9 +6,16 @@ ShowPort - Windows 端口可视化管理工具
 import os
 import subprocess
 import re
+import json
+import webbrowser
+from urllib.request import urlopen, Request
 
 import psutil
 import webview
+
+
+CURRENT_VERSION = "1.1.0"
+GITHUB_REPO = "deeperxh/show-port"
 
 
 def get_connections():
@@ -121,6 +128,28 @@ def kill_process(pid, lang='zh'):
         return {'success': False, 'message': msg}
 
 
+def check_for_update():
+    """检查 GitHub Releases 是否有新版本"""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = Request(url, headers={"User-Agent": "ShowPort-Updater"})
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        tag = data.get("tag_name", "")
+        remote_ver = tag.lstrip("v")
+        if remote_ver > CURRENT_VERSION:
+            return {
+                "hasUpdate": True,
+                "currentVersion": CURRENT_VERSION,
+                "latestVersion": remote_ver,
+                "url": data.get("html_url", ""),
+                "body": data.get("body", ""),
+            }
+    except Exception:
+        pass
+    return {"hasUpdate": False, "currentVersion": CURRENT_VERSION}
+
+
 class Api:
     """暴露给前端 JS 调用的 Python API"""
 
@@ -130,6 +159,12 @@ class Api:
     def kill_pid(self, pid, lang='zh'):
         return kill_process(pid, lang)
 
+    def check_update(self):
+        return check_for_update()
+
+    def open_url(self, url):
+        webbrowser.open(url)
+
 
 HTML = r"""
 <!DOCTYPE html>
@@ -137,9 +172,10 @@ HTML = r"""
 <head>
 <meta charset="UTF-8">
 <title>ShowPort</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
-
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
@@ -150,23 +186,90 @@ HTML = r"""
     --bg-row-hover: #eef0ff;
     --bg-row-stripe: #fafbfd;
     --border: #e2e4ea;
+    --border-light: #f0f1f5;
     --border-focus: #5b6ef5;
     --text-primary: #1a1d2e;
     --text-secondary: #5a5e72;
-    --text-muted: #9498ab;
+    --text-muted: #6b6f82;
     --accent: #5b6ef5;
     --accent-light: #eef0ff;
     --danger: #e5354b;
     --danger-hover: #ff4d63;
     --danger-bg: #fef2f2;
+    --danger-border: #fecaca;
+    --danger-hover-bg: #fee2e2;
     --success: #10b981;
     --success-bg: #ecfdf5;
+    --success-text: #065f46;
+    --error-text: #991b1b;
+    --info-text: #3730a3;
     --listening: #10b981;
     --established: #3b82f6;
     --time-wait: #f59e0b;
     --close-wait: #f97316;
+    --status-listen-bg: #ecfdf5;
+    --status-established-bg: #eff6ff;
+    --status-time-wait-bg: #fffbeb;
+    --status-close-wait-bg: #fff7ed;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --scrollbar-thumb: #cccfda;
+    --scrollbar-thumb-hover: #b0b4c2;
+    --mark-bg: rgba(91,110,245,0.18);
+    --focus-ring: 0 0 0 3px rgba(91,110,245,0.12);
+    --overlay-bg: rgba(0,0,0,0.25);
+    --modal-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    --toast-success-border: #a7f3d0;
+    --toast-error-border: #fecaca;
+    --toast-info-border: #c7d2fe;
+    --toggle-knob: #ffffff;
+  }
+
+  [data-theme="dark"] {
+      --bg-primary: #1a1b2e;
+      --bg-surface: #242538;
+      --bg-toolbar: #242538;
+      --bg-input: #2d2e42;
+      --bg-row-hover: #2d2e52;
+      --bg-row-stripe: #1e1f34;
+      --border: #3a3b52;
+      --border-light: #2d2e42;
+      --border-focus: #7b8af7;
+      --text-primary: #e8e9f0;
+      --text-secondary: #a8abba;
+      --text-muted: #8a8e9f;
+      --accent: #7b8af7;
+      --accent-light: #2a2b52;
+      --danger: #f06070;
+      --danger-hover: #ff7080;
+      --danger-bg: #2e1a1e;
+      --danger-border: #5a2a30;
+      --danger-hover-bg: #3e2228;
+      --success: #34d399;
+      --success-bg: #1a2e24;
+      --success-text: #6ee7b7;
+      --error-text: #fca5a5;
+      --info-text: #a5b4fc;
+      --listening: #34d399;
+      --established: #60a5fa;
+      --time-wait: #fbbf24;
+      --close-wait: #fb923c;
+      --status-listen-bg: #1a2e24;
+      --status-established-bg: #1a2232;
+      --status-time-wait-bg: #2e2a1a;
+      --status-close-wait-bg: #2e241a;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --scrollbar-thumb: #4a4b62;
+      --scrollbar-thumb-hover: #5a5b72;
+      --mark-bg: rgba(123,138,247,0.25);
+      --focus-ring: 0 0 0 3px rgba(123,138,247,0.25);
+      --overlay-bg: rgba(0,0,0,0.5);
+      --modal-shadow: 0 12px 40px rgba(0,0,0,0.4);
+      --toast-success-border: #065f46;
+      --toast-error-border: #7f1d1d;
+      --toast-info-border: #3730a3;
+      --toggle-knob: #e8e9f0;
   }
 
   html, body {
@@ -176,6 +279,18 @@ HTML = r"""
     color: var(--text-primary);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .app {
@@ -248,8 +363,8 @@ HTML = r"""
 
   .search-box input:focus {
     border-color: var(--border-focus);
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(91,110,245,0.12);
+    background: var(--bg-surface);
+    box-shadow: var(--focus-ring);
   }
 
   .search-box input:focus + svg { color: var(--accent); }
@@ -271,7 +386,7 @@ HTML = r"""
     padding: 8px 14px;
     border: 1.5px solid var(--border);
     border-radius: 8px;
-    background: #fff;
+    background: var(--bg-surface);
     color: var(--text-secondary);
     font-family: 'Noto Sans SC', sans-serif;
     font-size: 12px;
@@ -288,6 +403,7 @@ HTML = r"""
   }
 
   .btn:active { transform: scale(0.97); }
+  .btn:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   .btn svg { width: 14px; height: 14px; }
 
@@ -322,7 +438,8 @@ HTML = r"""
   }
 
   .toggle:checked { background: var(--accent); border-color: var(--accent); }
-  .toggle:checked::after { left: 18px; background: #fff; }
+  .toggle:checked::after { left: 18px; background: var(--toggle-knob); }
+  .toggle:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   /* ---- Stats Bar ---- */
   .stats-bar {
@@ -355,8 +472,8 @@ HTML = r"""
 
   .table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
   .table-wrap::-webkit-scrollbar-track { background: var(--bg-primary); }
-  .table-wrap::-webkit-scrollbar-thumb { background: #cccfda; border-radius: 4px; }
-  .table-wrap::-webkit-scrollbar-thumb:hover { background: #b0b4c2; }
+  .table-wrap::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+  .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
   table {
     width: 100%;
@@ -384,6 +501,7 @@ HTML = r"""
   }
 
   th:hover { color: var(--text-primary); }
+  th:last-child { cursor: default; }
 
   th .sort-arrow {
     display: inline-block;
@@ -409,7 +527,7 @@ HTML = r"""
 
   td {
     padding: 7px 14px;
-    border-bottom: 1px solid #f0f1f5;
+    border-bottom: 1px solid var(--border-light);
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
     color: var(--text-secondary);
@@ -431,10 +549,10 @@ HTML = r"""
     letter-spacing: 0.4px;
   }
 
-  .status-LISTEN { background: #ecfdf5; color: var(--listening); }
-  .status-ESTABLISHED { background: #eff6ff; color: var(--established); }
-  .status-TIME_WAIT { background: #fffbeb; color: var(--time-wait); }
-  .status-CLOSE_WAIT { background: #fff7ed; color: var(--close-wait); }
+  .status-LISTEN { background: var(--status-listen-bg); color: var(--listening); }
+  .status-ESTABLISHED { background: var(--status-established-bg); color: var(--established); }
+  .status-TIME_WAIT { background: var(--status-time-wait-bg); color: var(--time-wait); }
+  .status-CLOSE_WAIT { background: var(--status-close-wait-bg); color: var(--close-wait); }
   .status-NONE, .status-other { background: var(--bg-input); color: var(--text-muted); }
 
   .proc-name { color: var(--text-primary); font-weight: 500; }
@@ -446,7 +564,7 @@ HTML = r"""
     align-items: center;
     gap: 3px;
     padding: 4px 10px;
-    border: 1px solid #fecaca;
+    border: 1px solid var(--danger-border);
     border-radius: 6px;
     background: var(--danger-bg);
     color: var(--danger);
@@ -458,11 +576,13 @@ HTML = r"""
   }
 
   .btn-kill:hover {
-    background: #fee2e2;
+    background: var(--danger-hover-bg);
     border-color: var(--danger);
     transform: translateY(-1px);
     box-shadow: 0 2px 6px rgba(229,53,75,0.15);
   }
+
+  .btn-kill:focus-visible { box-shadow: 0 0 0 3px rgba(229,53,75,0.2); outline: none; }
 
   .btn-kill svg { width: 12px; height: 12px; }
   .btn-kill:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -483,41 +603,49 @@ HTML = r"""
     border-radius: 10px;
     font-size: 12px;
     font-weight: 500;
-    animation: toastIn 0.25s ease-out, toastOut 0.25s ease-in 2.7s forwards;
+    animation: toastIn 0.25s ease-out;
     max-width: 360px;
     box-shadow: var(--shadow-md);
+    transition: opacity 0.25s ease-in;
   }
 
-  .toast-success { background: var(--success-bg); color: #065f46; border: 1px solid #a7f3d0; }
-  .toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-  .toast-info { background: var(--accent-light); color: #3730a3; border: 1px solid #c7d2fe; }
+  .toast.toast-exit { opacity: 0; }
+
+  .toast-success { background: var(--success-bg); color: var(--success-text); border: 1px solid var(--toast-success-border); }
+  .toast-error { background: var(--danger-bg); color: var(--error-text); border: 1px solid var(--toast-error-border); }
+  .toast-info { background: var(--accent-light); color: var(--info-text); border: 1px solid var(--toast-info-border); }
 
   @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-  @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
 
   /* ---- Modal ---- */
   .modal-overlay {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.25);
+    background: var(--overlay-bg);
     backdrop-filter: blur(3px);
     z-index: 900;
     align-items: center;
     justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
   }
 
-  .modal-overlay.active { display: flex; }
+  .modal-overlay.active { display: flex; opacity: 1; }
+  .modal-overlay.closing { opacity: 0; }
 
   .modal {
-    background: #fff;
+    background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 24px;
     min-width: 380px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    box-shadow: var(--modal-shadow);
     animation: modalIn 0.2s ease-out;
+    transition: opacity 0.15s, transform 0.15s;
   }
+
+  .modal-overlay.closing .modal { opacity: 0; transform: scale(0.95); }
 
   @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 
@@ -531,7 +659,7 @@ HTML = r"""
     padding: 8px 18px;
     border: 1.5px solid var(--border);
     border-radius: 8px;
-    background: #fff;
+    background: var(--bg-surface);
     color: var(--text-secondary);
     font-size: 13px;
     cursor: pointer;
@@ -539,13 +667,14 @@ HTML = r"""
   }
 
   .modal-actions .btn-cancel:hover { border-color: var(--text-muted); color: var(--text-primary); }
+  .modal-actions .btn-cancel:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   .modal-actions .btn-confirm-kill {
     padding: 8px 18px;
     border: none;
     border-radius: 8px;
     background: var(--danger);
-    color: #fff;
+    color: var(--toggle-knob);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -553,6 +682,7 @@ HTML = r"""
   }
 
   .modal-actions .btn-confirm-kill:hover { background: var(--danger-hover); }
+  .modal-actions .btn-confirm-kill:focus-visible { box-shadow: 0 0 0 3px rgba(229,53,75,0.2); outline: none; }
 
   /* ---- Empty ---- */
   .empty-state {
@@ -576,6 +706,7 @@ HTML = r"""
     animation: loadSlide 0.9s ease-in-out infinite;
     display: none;
     z-index: 30;
+    will-change: transform;
   }
 
   .loading-bar.active { display: block; }
@@ -583,7 +714,7 @@ HTML = r"""
   @keyframes loadSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 
   mark {
-    background: rgba(91,110,245,0.18);
+    background: var(--mark-bg);
     color: var(--text-primary);
     border-radius: 2px;
     padding: 0 2px;
@@ -593,7 +724,7 @@ HTML = r"""
     padding: 5px 10px;
     border: 1.5px solid var(--border);
     border-radius: 6px;
-    background: #fff;
+    background: var(--bg-surface);
     color: var(--text-muted);
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -603,14 +734,86 @@ HTML = r"""
     letter-spacing: 0.3px;
   }
   .lang-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .lang-btn:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+
+  .theme-btn {
+    padding: 5px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+  }
+  .theme-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .theme-btn:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+
+  /* ---- Update Banner ---- */
+  .update-banner {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--accent-light), var(--status-established-bg));
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    animation: bannerIn 0.3s ease-out;
+  }
+  .update-banner.active { display: flex; }
+  .update-banner .update-icon { font-size: 16px; flex-shrink: 0; }
+  .update-banner .update-text { flex: 1; }
+  .update-banner .update-text strong { color: var(--accent); }
+  .update-banner .btn-update {
+    padding: 6px 14px;
+    border: 1.5px solid var(--accent);
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .update-banner .btn-update:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(91,110,245,0.3); }
+  .update-banner .btn-dismiss {
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .update-banner .btn-dismiss:hover { background: var(--bg-input); color: var(--text-primary); }
+  @keyframes bannerIn { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
 </style>
 </head>
 <body>
-<div class="app">
-  <div class="loading-bar" id="loadingBar"></div>
+<div class="app" role="main">
+  <h1 class="sr-only">ShowPort</h1>
+  <div class="loading-bar" id="loadingBar" role="progressbar" aria-label="Loading"></div>
 
-  <div class="toolbar">
-    <div class="logo">
+  <div class="update-banner" id="updateBanner" role="alert">
+    <span class="update-icon" aria-hidden="true">&#x1F680;</span>
+    <span class="update-text" id="updateText"></span>
+    <button class="btn-update" id="btnUpdate" onclick="downloadUpdate()"></button>
+    <button class="btn-dismiss" onclick="dismissUpdate()" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <nav class="toolbar" aria-label="Toolbar">
+    <div class="logo" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
@@ -618,49 +821,50 @@ HTML = r"""
     </div>
 
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="搜索端口、PID、进程名 ..." autofocus />
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <input type="text" id="searchInput" placeholder="搜索端口、PID、进程名 ..." aria-label="Search" autofocus />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
       </svg>
     </div>
 
     <div class="toolbar-actions">
-      <button class="btn" onclick="refreshData()" title="Ctrl+R">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="btn" onclick="refreshData()" title="Ctrl+R" aria-label="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>
         <span id="labelRefresh">刷新</span>
       </button>
       <div class="auto-refresh">
-        <input type="checkbox" class="toggle" id="autoRefreshToggle" />
+        <input type="checkbox" class="toggle" id="autoRefreshToggle" role="switch" aria-checked="false" aria-label="Auto refresh" />
         <label for="autoRefreshToggle" id="labelAutoRefresh" style="cursor:pointer;">自动刷新</label>
       </div>
-      <button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()" aria-label="Switch language">EN</button>
+      <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle theme">&#x1F319;</button>
     </div>
-  </div>
+  </nav>
 
-  <div class="stats-bar">
-    <div class="stat stat-total"><span class="dot"></span><span id="labelTotal">总计</span> <span class="stat-val" id="statTotal">0</span></div>
-    <div class="stat stat-listening"><span class="dot"></span>LISTEN <span class="stat-val" id="statListening">0</span></div>
-    <div class="stat stat-established"><span class="dot"></span>ESTABLISHED <span class="stat-val" id="statEstablished">0</span></div>
-    <div class="stat stat-other"><span class="dot"></span><span id="labelOther">其他</span> <span class="stat-val" id="statOther">0</span></div>
+  <div class="stats-bar" role="status" aria-live="polite">
+    <div class="stat stat-total"><span class="dot" aria-hidden="true"></span><span id="labelTotal">总计</span> <span class="stat-val" id="statTotal">0</span></div>
+    <div class="stat stat-listening"><span class="dot" aria-hidden="true"></span>LISTEN <span class="stat-val" id="statListening">0</span></div>
+    <div class="stat stat-established"><span class="dot" aria-hidden="true"></span>ESTABLISHED <span class="stat-val" id="statEstablished">0</span></div>
+    <div class="stat stat-other"><span class="dot" aria-hidden="true"></span><span id="labelOther">其他</span> <span class="stat-val" id="statOther">0</span></div>
     <div style="margin-left:auto;" id="lastRefresh"></div>
   </div>
 
   <div class="table-wrap" id="tableWrap">
-    <table>
+    <table aria-label="Network connections">
       <thead>
         <tr>
-          <th data-col="proto" data-type="str"><span class="th-label">协议</span> <span class="sort-arrow"></span></th>
-          <th data-col="localAddr" data-type="str"><span class="th-label">本地地址</span> <span class="sort-arrow"></span></th>
-          <th data-col="localPort" data-type="num"><span class="th-label">本地端口</span> <span class="sort-arrow"></span></th>
-          <th data-col="remoteAddr" data-type="str"><span class="th-label">远程地址</span> <span class="sort-arrow"></span></th>
-          <th data-col="remotePort" data-type="num"><span class="th-label">远程端口</span> <span class="sort-arrow"></span></th>
-          <th data-col="status" data-type="str"><span class="th-label">状态</span> <span class="sort-arrow"></span></th>
-          <th data-col="pid" data-type="num"><span class="th-label">PID</span> <span class="sort-arrow"></span></th>
-          <th data-col="procName" data-type="str"><span class="th-label">进程名</span> <span class="sort-arrow"></span></th>
-          <th><span class="th-label">操作</span></th>
+          <th data-col="proto" data-type="str" aria-sort="none"><span class="th-label">协议</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="localAddr" data-type="str" aria-sort="none"><span class="th-label">本地地址</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="localPort" data-type="num" aria-sort="none"><span class="th-label">本地端口</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="remoteAddr" data-type="str" aria-sort="none"><span class="th-label">远程地址</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="remotePort" data-type="num" aria-sort="none"><span class="th-label">远程端口</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="status" data-type="str" aria-sort="none"><span class="th-label">状态</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="pid" data-type="num" aria-sort="none"><span class="th-label">PID</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th data-col="procName" data-type="str" aria-sort="none"><span class="th-label">进程名</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+          <th aria-label="Actions"><span class="th-label">操作</span></th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -668,9 +872,9 @@ HTML = r"""
   </div>
 </div>
 
-<div class="toast-container" id="toastContainer"></div>
+<div class="toast-container" id="toastContainer" aria-live="assertive" aria-atomic="true"></div>
 
-<div class="modal-overlay" id="killModal">
+<div class="modal-overlay" id="killModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="modal">
     <h3 id="modalTitle">确认终止进程</h3>
     <p id="killModalMsg"></p>
@@ -702,6 +906,8 @@ HTML = r"""
       noMatch: t => '没有匹配 "' + t + '" 的结果',
       noConn: '没有活动连接',
       langBtn: 'EN',
+      updateAvailable: (cur, latest) => '发现新版本 <strong>v' + latest + '</strong>（当前 v' + cur + '）',
+      updateBtn: '前往下载',
     },
     en: {
       search: 'Search port, PID, process ...',
@@ -722,16 +928,44 @@ HTML = r"""
       noMatch: t => 'No results for "' + t + '"',
       noConn: 'No active connections',
       langBtn: '中文',
+      updateAvailable: (cur, latest) => 'New version <strong>v' + latest + '</strong> available (current v' + cur + ')',
+      updateBtn: 'Download',
     }
   };
 
   let lang = 'zh';
   try { lang = localStorage.getItem('showport-lang') || 'zh'; } catch(e) {}
+
+  let theme = 'light';
+  try {
+    const saved = localStorage.getItem('showport-theme');
+    if (saved) { theme = saved; }
+    else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { theme = 'dark'; }
+  } catch(e) {}
+
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('themeBtn').innerHTML = theme === 'dark' ? '&#x2600;&#xFE0F;' : '&#x1F319;';
+  }
+
+  function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('showport-theme', theme); } catch(e) {}
+    applyTheme();
+  }
   let allData = [];
   let sortCol = 'localPort';
   let sortDir = 'asc';
   let autoRefreshTimer = null;
   let pendingKillPid = null;
+
+  function debounce(fn, ms) {
+    let timer;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
 
   function t(key) { return i18n[lang][key]; }
 
@@ -748,6 +982,7 @@ HTML = r"""
     document.getElementById('langBtn').textContent = L.langBtn;
     document.querySelectorAll('.th-label').forEach((el, i) => { el.textContent = L.th[i]; });
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    if (updateInfo) showUpdateBanner();
   }
 
   function toggleLang() {
@@ -767,11 +1002,14 @@ HTML = r"""
 
   function showToast(msg, type) {
     const c = document.getElementById('toastContainer');
-    const t = document.createElement('div');
-    t.className = 'toast toast-' + (type || 'info');
-    t.textContent = msg;
-    c.appendChild(t);
-    setTimeout(() => t.remove(), 3000);
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + (type || 'info');
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('toast-exit');
+      el.addEventListener('transitionend', () => el.remove(), { once: true });
+    }, 2700);
   }
 
   async function refreshData() {
@@ -779,7 +1017,6 @@ HTML = r"""
     try {
       allData = await fetchPorts();
       renderTable();
-      updateStats();
       document.getElementById('lastRefresh').textContent = t('updatedAt')(new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en'));
     } catch (e) {
       showToast(t('fetchError')(e), 'error');
@@ -788,14 +1025,13 @@ HTML = r"""
     }
   }
 
-  function updateStats() {
-    const d = getFilteredData();
-    const l = d.filter(r => r.status === 'LISTEN').length;
-    const e = d.filter(r => r.status === 'ESTABLISHED').length;
-    document.getElementById('statTotal').textContent = d.length;
+  function updateStats(data) {
+    const l = data.filter(r => r.status === 'LISTEN').length;
+    const e = data.filter(r => r.status === 'ESTABLISHED').length;
+    document.getElementById('statTotal').textContent = data.length;
     document.getElementById('statListening').textContent = l;
     document.getElementById('statEstablished').textContent = e;
-    document.getElementById('statOther').textContent = d.length - l - e;
+    document.getElementById('statOther').textContent = data.length - l - e;
   }
 
   function getSearchTerm() { return document.getElementById('searchInput').value.trim().toLowerCase(); }
@@ -831,17 +1067,19 @@ HTML = r"""
   function renderTable() {
     const tbody = document.getElementById('tableBody');
     const term = getSearchTerm();
-    let data = sortData(getFilteredData());
+    const filtered = getFilteredData();
+    let data = sortData(filtered);
+    updateStats(filtered);
 
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><p>' + (term ? t('noMatch')(esc(term)) : t('noConn')) + '</p></div></td></tr>';
-      updateStats();
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><p>' + (term ? t('noMatch')(esc(term)) : t('noConn')) + '</p></div></td></tr>';
       return;
     }
 
     tbody.innerHTML = data.map(r => {
       const sc = ['LISTEN','ESTABLISHED','TIME_WAIT','CLOSE_WAIT','NONE'].includes(r.status) ? 'status-'+r.status : 'status-other';
       const dis = r.pid <= 0 ? 'disabled' : '';
+      const killLabel = r.pid > 0 ? ' aria-label="Kill '+esc(r.procName)+' (PID: '+r.pid+')"' : '';
       return '<tr>'
         + '<td>' + hl(r.proto, term) + '</td>'
         + '<td>' + hl(r.localAddr, term) + '</td>'
@@ -851,22 +1089,41 @@ HTML = r"""
         + '<td><span class="status-badge '+sc+'">' + hl(r.status||'-', term) + '</span></td>'
         + '<td>' + hl(r.pid, term) + '</td>'
         + '<td class="proc-name">' + hl(r.procName||'-', term) + '</td>'
-        + '<td style="text-align:center"><button class="btn-kill" '+dis+' onclick="confirmKill('+r.pid+',\''+esc(r.procName).replace(/'/g,"\\'")+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> Kill</button></td>'
+        + '<td style="text-align:center"><button class="btn-kill" '+dis+killLabel+' onclick="confirmKill('+r.pid+',\''+esc(r.procName).replace(/'/g,"\\'")+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> Kill</button></td>'
         + '</tr>';
     }).join('');
-    updateStats();
   }
 
   function confirmKill(pid, name) {
     pendingKillPid = pid;
     document.getElementById('killModalMsg').innerHTML = t('modalMsg')(esc(name), pid);
-    document.getElementById('killModal').classList.add('active');
+    const modal = document.getElementById('killModal');
+    modal.classList.remove('closing');
+    modal.classList.add('active');
+    document.getElementById('btnConfirmKill').focus();
   }
 
   function closeKillModal() {
-    document.getElementById('killModal').classList.remove('active');
-    pendingKillPid = null;
+    const modal = document.getElementById('killModal');
+    modal.classList.add('closing');
+    setTimeout(() => {
+      modal.classList.remove('active', 'closing');
+      pendingKillPid = null;
+    }, 200);
   }
+
+  /* Focus trap for modal */
+  document.getElementById('killModal').addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      const focusable = this.querySelectorAll('button:not([disabled])');
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+  });
 
   document.getElementById('btnConfirmKill').addEventListener('click', async () => {
     if (pendingKillPid === null) return;
@@ -884,16 +1141,21 @@ HTML = r"""
       const col = th.dataset.col;
       if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
       else { sortCol = col; sortDir = 'asc'; }
-      document.querySelectorAll('th').forEach(h => h.classList.remove('sorted'));
+      document.querySelectorAll('th[data-col]').forEach(h => {
+        h.classList.remove('sorted');
+        h.setAttribute('aria-sort', 'none');
+      });
       th.classList.add('sorted');
       th.querySelector('.sort-arrow').textContent = sortDir === 'asc' ? '▲' : '▼';
+      th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
       renderTable();
     });
   });
 
-  document.getElementById('searchInput').addEventListener('input', renderTable);
+  document.getElementById('searchInput').addEventListener('input', debounce(renderTable, 150));
 
   document.getElementById('autoRefreshToggle').addEventListener('change', e => {
+    e.target.setAttribute('aria-checked', e.target.checked);
     if (e.target.checked) {
       autoRefreshTimer = setInterval(refreshData, 3000);
       showToast(t('autoOn'), 'info');
@@ -912,7 +1174,36 @@ HTML = r"""
     }
   });
 
-  window.addEventListener('pywebviewready', function() { applyLang(); refreshData(); });
+  let updateInfo = null;
+
+  async function checkUpdate() {
+    try {
+      const result = await window.pywebview.api.check_update();
+      if (result.hasUpdate) {
+        updateInfo = result;
+        showUpdateBanner();
+      }
+    } catch (e) { /* silent fail */ }
+  }
+
+  function showUpdateBanner() {
+    if (!updateInfo) return;
+    document.getElementById('updateText').innerHTML = t('updateAvailable')(updateInfo.currentVersion, updateInfo.latestVersion);
+    document.getElementById('btnUpdate').textContent = t('updateBtn');
+    document.getElementById('updateBanner').classList.add('active');
+  }
+
+  function downloadUpdate() {
+    if (updateInfo && updateInfo.url) {
+      window.pywebview.api.open_url(updateInfo.url);
+    }
+  }
+
+  function dismissUpdate() {
+    document.getElementById('updateBanner').classList.remove('active');
+  }
+
+  window.addEventListener('pywebviewready', function() { applyTheme(); applyLang(); refreshData(); checkUpdate(); });
 </script>
 </body>
 </html>
