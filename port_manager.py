@@ -8,16 +8,42 @@ import sys
 import subprocess
 import re
 import json
+import socket
 import tempfile
 import webbrowser
-from urllib.request import urlopen, Request
+from urllib.request import urlopen, Request, ProxyHandler, build_opener
 
 import psutil
 import webview
 
 
-CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION = "1.4.1"
 GITHUB_REPO = "deeperxh/showport"
+PROXY_PORTS = [7890, 7897, 1080, 10809]  # Clash, Clash Verge, SOCKS, V2Ray
+
+
+def _detect_proxy():
+    """检测本地是否有代理在运行"""
+    for port in PROXY_PORTS:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.3)
+            s.connect(("127.0.0.1", port))
+            s.close()
+            return f"http://127.0.0.1:{port}"
+        except (OSError, socket.timeout):
+            continue
+    return None
+
+
+def _url_open(url, timeout=10):
+    """带代理自动检测的 urlopen"""
+    req = Request(url, headers={"User-Agent": "ShowPort-Updater"})
+    proxy = _detect_proxy()
+    if proxy:
+        opener = build_opener(ProxyHandler({"http": proxy, "https": proxy}))
+        return opener.open(req, timeout=timeout)
+    return urlopen(req, timeout=timeout)
 
 
 def get_connections():
@@ -134,8 +160,7 @@ def check_for_update():
     """检查 GitHub Releases 是否有新版本"""
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        req = Request(url, headers={"User-Agent": "ShowPort-Updater"})
-        with urlopen(req, timeout=5) as resp:
+        with _url_open(url, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         tag = data.get("tag_name", "")
         remote_ver = tag.lstrip("v")
@@ -171,8 +196,7 @@ def do_auto_update(download_url):
     tmp_dir = tempfile.gettempdir()
     tmp_exe = os.path.join(tmp_dir, "ShowPort_update.exe")
     try:
-        req = Request(download_url, headers={"User-Agent": "ShowPort-Updater"})
-        with urlopen(req, timeout=60) as resp:
+        with _url_open(download_url, timeout=120) as resp:
             with open(tmp_exe, "wb") as f:
                 while True:
                     chunk = resp.read(65536)
