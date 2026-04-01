@@ -31,6 +31,8 @@
 | Auto Refresh | Toggle 3-second auto refresh in the toolbar |
 | Stats | Total, LISTEN, ESTABLISHED counts at the top |
 | i18n | Switch between Chinese and English via the toolbar button |
+| Theme | Light / Dark theme toggle, defaults to system preference |
+| Auto Update | Checks GitHub Releases on startup, shows banner when new version available |
 
 ### Shortcuts
 
@@ -89,6 +91,8 @@ Python + pywebview (Edge WebView2) + psutil + PyInstaller
 | 自动刷新 | 工具栏可开启 3 秒自动刷新，实时监控端口变化 |
 | 统计概览 | 顶部显示连接总数、LISTEN 数、ESTABLISHED 数 |
 | 中英文切换 | 工具栏按钮一键切换中英文界面 |
+| 主题切换 | 亮色 / 暗色主题切换，默认跟随系统 |
+| 自动更新 | 启动时检查 GitHub Releases，发现新版本自动提示下载 |
 
 ### 快捷键
 
