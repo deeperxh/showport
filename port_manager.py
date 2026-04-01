@@ -14,7 +14,7 @@ import psutil
 import webview
 
 
-CURRENT_VERSION = "1.1.0"
+CURRENT_VERSION = "1.2.0"
 GITHUB_REPO = "deeperxh/showport"
 
 
@@ -172,9 +172,6 @@ HTML = r"""
 <head>
 <meta charset="UTF-8">
 <title>ShowPort</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -223,6 +220,8 @@ HTML = r"""
     --toast-error-border: #fecaca;
     --toast-info-border: #c7d2fe;
     --toggle-knob: #ffffff;
+    --danger-shadow: 0 2px 6px rgba(229,53,75,0.15);
+    --accent-shadow: 0 2px 8px rgba(91,110,245,0.3);
   }
 
   [data-theme="dark"] {
@@ -270,11 +269,13 @@ HTML = r"""
       --toast-error-border: #7f1d1d;
       --toast-info-border: #3730a3;
       --toggle-knob: #e8e9f0;
+      --danger-shadow: 0 2px 6px rgba(240,96,112,0.25);
+      --accent-shadow: 0 2px 8px rgba(123,138,247,0.35);
   }
 
   html, body {
     height: 100%;
-    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     overflow: hidden;
@@ -303,14 +304,15 @@ HTML = r"""
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 20px;
+    gap: 12px 14px;
+    padding: 12px 20px;
     background: var(--bg-toolbar);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     box-shadow: var(--shadow-sm);
     position: relative;
     z-index: 20;
+    flex-wrap: wrap;
   }
 
   .toolbar .logo {
@@ -324,7 +326,7 @@ HTML = r"""
   .toolbar .logo svg { width: 22px; height: 22px; color: var(--accent); }
 
   .toolbar .logo span {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
     font-weight: 700;
     font-size: 14px;
     letter-spacing: 0.5px;
@@ -345,7 +347,7 @@ HTML = r"""
     width: 16px; height: 16px;
     color: var(--text-muted);
     pointer-events: none;
-    transition: color 0.2s;
+    transition: color 0.15s;
   }
 
   .search-box input {
@@ -355,10 +357,10 @@ HTML = r"""
     border: 1.5px solid transparent;
     border-radius: 10px;
     color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
     font-size: 13px;
     outline: none;
-    transition: all 0.2s;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
   }
 
   .search-box input:focus {
@@ -388,11 +390,11 @@ HTML = r"""
     border-radius: 8px;
     background: var(--bg-surface);
     color: var(--text-secondary);
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s;
     white-space: nowrap;
   }
 
@@ -417,28 +419,28 @@ HTML = r"""
 
   .toggle {
     position: relative;
-    width: 36px; height: 20px;
+    width: 40px; height: 24px;
     appearance: none;
     background: var(--bg-input);
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.25s;
+    transition: background 0.25s, border-color 0.25s;
     flex-shrink: 0;
   }
 
   .toggle::after {
     content: '';
     position: absolute;
-    top: 2px; left: 2px;
-    width: 14px; height: 14px;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
     background: var(--text-muted);
     border-radius: 50%;
-    transition: all 0.25s;
+    transition: left 0.25s, background 0.25s;
   }
 
   .toggle:checked { background: var(--accent); border-color: var(--accent); }
-  .toggle:checked::after { left: 18px; background: var(--toggle-knob); }
+  .toggle:checked::after { left: 19px; background: var(--toggle-knob); }
   .toggle:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   /* ---- Stats Bar ---- */
@@ -448,7 +450,7 @@ HTML = r"""
     gap: 22px;
     padding: 8px 20px;
     border-bottom: 1px solid var(--border);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
     font-size: 11px;
     color: var(--text-muted);
     flex-shrink: 0;
@@ -515,20 +517,20 @@ HTML = r"""
   th.sorted { color: var(--accent); }
 
   /* Column widths */
-  th:nth-child(1), td:nth-child(1) { width: 56px; }
-  th:nth-child(2), td:nth-child(2) { width: 130px; }
-  th:nth-child(3), td:nth-child(3) { width: 80px; }
-  th:nth-child(4), td:nth-child(4) { width: 130px; }
-  th:nth-child(5), td:nth-child(5) { width: 80px; }
-  th:nth-child(6), td:nth-child(6) { width: 120px; }
-  th:nth-child(7), td:nth-child(7) { width: 68px; }
+  th:nth-child(1), td:nth-child(1) { width: 5%; }
+  th:nth-child(2), td:nth-child(2) { width: 13%; }
+  th:nth-child(3), td:nth-child(3) { width: 8%; }
+  th:nth-child(4), td:nth-child(4) { width: 13%; }
+  th:nth-child(5), td:nth-child(5) { width: 8%; }
+  th:nth-child(6), td:nth-child(6) { width: 12%; }
+  th:nth-child(7), td:nth-child(7) { width: 6%; }
   th:nth-child(8), td:nth-child(8) { width: auto; }
-  th:nth-child(9), td:nth-child(9) { width: 72px; text-align: center; }
+  th:nth-child(9), td:nth-child(9) { width: 8%; text-align: center; }
 
   td {
     padding: 7px 14px;
     border-bottom: 1px solid var(--border-light);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
     font-size: 12px;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -563,26 +565,27 @@ HTML = r"""
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border: 1px solid var(--danger-border);
     border-radius: 6px;
     background: var(--danger-bg);
     color: var(--danger);
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    min-height: 30px;
   }
 
   .btn-kill:hover {
     background: var(--danger-hover-bg);
     border-color: var(--danger);
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(229,53,75,0.15);
+    box-shadow: var(--shadow-md);
   }
 
-  .btn-kill:focus-visible { box-shadow: 0 0 0 3px rgba(229,53,75,0.2); outline: none; }
+  .btn-kill:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   .btn-kill svg { width: 12px; height: 12px; }
   .btn-kill:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -663,7 +666,7 @@ HTML = r"""
     color: var(--text-secondary);
     font-size: 13px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s;
   }
 
   .modal-actions .btn-cancel:hover { border-color: var(--text-muted); color: var(--text-primary); }
@@ -678,11 +681,11 @@ HTML = r"""
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: background 0.15s;
   }
 
   .modal-actions .btn-confirm-kill:hover { background: var(--danger-hover); }
-  .modal-actions .btn-confirm-kill:focus-visible { box-shadow: 0 0 0 3px rgba(229,53,75,0.2); outline: none; }
+  .modal-actions .btn-confirm-kill:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   /* ---- Empty ---- */
   .empty-state {
@@ -721,36 +724,37 @@ HTML = r"""
   }
 
   .lang-btn {
-    padding: 5px 10px;
+    padding: 7px 12px;
     border: 1.5px solid var(--border);
     border-radius: 6px;
     background: var(--bg-surface);
     color: var(--text-muted);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
     letter-spacing: 0.3px;
+    min-height: 32px;
   }
   .lang-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
   .lang-btn:focus-visible { box-shadow: var(--focus-ring); outline: none; }
 
   .theme-btn {
-    padding: 5px 10px;
+    padding: 7px 10px;
     border: 1.5px solid var(--border);
     border-radius: 6px;
     background: var(--bg-surface);
     color: var(--text-muted);
     font-size: 14px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
     line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 28px;
+    min-width: 34px;
+    min-height: 32px;
   }
   .theme-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
   .theme-btn:focus-visible { box-shadow: var(--focus-ring); outline: none; }
@@ -777,14 +781,14 @@ HTML = r"""
     border: 1.5px solid var(--accent);
     border-radius: 8px;
     background: var(--accent);
-    color: #fff;
+    color: var(--toggle-knob);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
     white-space: nowrap;
   }
-  .update-banner .btn-update:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(91,110,245,0.3); }
+  .update-banner .btn-update:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: var(--accent-shadow); }
   .update-banner .btn-dismiss {
     padding: 4px 8px;
     border: none;
@@ -794,7 +798,7 @@ HTML = r"""
     font-size: 16px;
     line-height: 1;
     border-radius: 4px;
-    transition: all 0.15s;
+    transition: background 0.15s, color 0.15s;
   }
   .update-banner .btn-dismiss:hover { background: var(--bg-input); color: var(--text-primary); }
   @keyframes bannerIn { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
@@ -1219,7 +1223,7 @@ def main():
         width=1100,
         height=720,
         min_size=(800, 500),
-        background_color='#f5f6fa',
+        background_color='#1e1f2e',
     )
     webview.start(debug=False)
 
