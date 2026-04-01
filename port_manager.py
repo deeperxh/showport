@@ -15,7 +15,7 @@ import webview
 
 
 CURRENT_VERSION = "1.1.0"
-GITHUB_REPO = "deeperxh/show-port"
+GITHUB_REPO = "deeperxh/showport"
 
 
 def get_connections():
