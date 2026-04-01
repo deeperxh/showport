@@ -4,9 +4,11 @@ ShowPort - Windows 端口可视化管理工具
 """
 
 import os
+import sys
 import subprocess
 import re
 import json
+import tempfile
 import webbrowser
 from urllib.request import urlopen, Request
 
@@ -14,7 +16,7 @@ import psutil
 import webview
 
 
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 GITHUB_REPO = "deeperxh/showport"
 
 
@@ -138,11 +140,18 @@ def check_for_update():
         tag = data.get("tag_name", "")
         remote_ver = tag.lstrip("v")
         if remote_ver > CURRENT_VERSION:
+            # 找 exe 资源的下载链接
+            download_url = ""
+            for asset in data.get("assets", []):
+                if asset.get("name", "").lower().endswith(".exe"):
+                    download_url = asset.get("browser_download_url", "")
+                    break
             return {
                 "hasUpdate": True,
                 "currentVersion": CURRENT_VERSION,
                 "latestVersion": remote_ver,
                 "url": data.get("html_url", ""),
+                "downloadUrl": download_url,
                 "body": data.get("body", ""),
             }
     except Exception:
@@ -150,8 +159,71 @@ def check_for_update():
     return {"hasUpdate": False, "currentVersion": CURRENT_VERSION}
 
 
+def do_auto_update(download_url):
+    """下载新 exe 并通过 bat 脚本替换自身"""
+    # 确定当前 exe 路径
+    if getattr(sys, 'frozen', False):
+        current_exe = sys.executable
+    else:
+        return {"success": False, "message": "仅打包后的 exe 支持自动更新"}
+
+    # 下载新 exe 到临时文件
+    tmp_dir = tempfile.gettempdir()
+    tmp_exe = os.path.join(tmp_dir, "ShowPort_update.exe")
+    try:
+        req = Request(download_url, headers={"User-Agent": "ShowPort-Updater"})
+        with urlopen(req, timeout=60) as resp:
+            with open(tmp_exe, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+    except Exception as e:
+        return {"success": False, "message": f"下载失败: {e}"}
+
+    # 创建 bat 脚本：等待当前进程退出 → 替换 exe → 启动新版 → 删除自身
+    bat_path = os.path.join(tmp_dir, "showport_update.bat")
+    pid = os.getpid()
+    bat_content = f'''@echo off
+echo Updating ShowPort...
+:wait
+tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >NUL
+    goto wait
+)
+copy /Y "{tmp_exe}" "{current_exe}" >NUL
+if errorlevel 1 (
+    echo Update failed, please update manually.
+    pause
+    exit /b 1
+)
+del /Q "{tmp_exe}" >NUL 2>&1
+start "" "{current_exe}"
+del /Q "%~f0" >NUL 2>&1
+exit /b 0
+'''
+    with open(bat_path, "w", encoding="gbk") as f:
+        f.write(bat_content)
+
+    # 启动 bat（隐藏窗口）
+    subprocess.Popen(
+        ["cmd", "/c", bat_path],
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+
+    return {"success": True}
+
+
 class Api:
     """暴露给前端 JS 调用的 Python API"""
+
+    def __init__(self):
+        self._window = None
+
+    def set_window(self, window):
+        self._window = window
 
     def get_ports(self):
         return get_connections()
@@ -164,6 +236,15 @@ class Api:
 
     def open_url(self, url):
         webbrowser.open(url)
+
+    def apply_update(self, download_url):
+        """下载新版并自动替换重启"""
+        result = do_auto_update(download_url)
+        if result.get("success"):
+            # 关闭窗口，触发 bat 脚本替换
+            if self._window:
+                self._window.destroy()
+        return result
 
 
 HTML = r"""
@@ -789,6 +870,19 @@ HTML = r"""
     white-space: nowrap;
   }
   .update-banner .btn-update:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: var(--accent-shadow); }
+  .update-banner .btn-update:disabled { opacity: 0.7; cursor: wait; transform: none; box-shadow: none; }
+  .update-banner .btn-update-manual {
+    padding: 6px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .update-banner .btn-update-manual:hover { border-color: var(--accent); color: var(--accent); }
   .update-banner .btn-dismiss {
     padding: 4px 8px;
     border: none;
@@ -812,7 +906,8 @@ HTML = r"""
   <div class="update-banner" id="updateBanner" role="alert">
     <span class="update-icon" aria-hidden="true">&#x1F680;</span>
     <span class="update-text" id="updateText"></span>
-    <button class="btn-update" id="btnUpdate" onclick="downloadUpdate()"></button>
+    <button class="btn-update" id="btnUpdate" onclick="applyUpdate()"></button>
+    <button class="btn-update-manual" id="btnUpdateManual" onclick="openReleasePage()" style="display:none;"></button>
     <button class="btn-dismiss" onclick="dismissUpdate()" aria-label="Dismiss">&times;</button>
   </div>
 
@@ -911,7 +1006,10 @@ HTML = r"""
       noConn: '没有活动连接',
       langBtn: 'EN',
       updateAvailable: (cur, latest) => '发现新版本 <strong>v' + latest + '</strong>（当前 v' + cur + '）',
-      updateBtn: '前往下载',
+      updateBtn: '立即更新',
+      updateBtnManual: '手动下载',
+      updating: '正在下载更新...',
+      updateFailed: e => '更新失败: ' + e,
     },
     en: {
       search: 'Search port, PID, process ...',
@@ -933,7 +1031,10 @@ HTML = r"""
       noConn: 'No active connections',
       langBtn: '中文',
       updateAvailable: (cur, latest) => 'New version <strong>v' + latest + '</strong> available (current v' + cur + ')',
-      updateBtn: 'Download',
+      updateBtn: 'Update Now',
+      updateBtnManual: 'Manual Download',
+      updating: 'Downloading update...',
+      updateFailed: e => 'Update failed: ' + e,
     }
   };
 
@@ -1179,11 +1280,12 @@ HTML = r"""
   });
 
   let updateInfo = null;
+  let updateCheckTimer = null;
 
   async function checkUpdate() {
     try {
       const result = await window.pywebview.api.check_update();
-      if (result.hasUpdate) {
+      if (result.hasUpdate && (!updateInfo || result.latestVersion !== updateInfo.latestVersion)) {
         updateInfo = result;
         showUpdateBanner();
       }
@@ -1193,11 +1295,43 @@ HTML = r"""
   function showUpdateBanner() {
     if (!updateInfo) return;
     document.getElementById('updateText').innerHTML = t('updateAvailable')(updateInfo.currentVersion, updateInfo.latestVersion);
-    document.getElementById('btnUpdate').textContent = t('updateBtn');
+    const btnUpdate = document.getElementById('btnUpdate');
+    const btnManual = document.getElementById('btnUpdateManual');
+    btnUpdate.textContent = t('updateBtn');
+    btnUpdate.disabled = false;
+    btnManual.textContent = t('updateBtnManual');
+    // 有 exe 下载链接时显示自动更新，否则只显示手动下载
+    if (updateInfo.downloadUrl) {
+      btnUpdate.style.display = '';
+      btnManual.style.display = '';
+    } else {
+      btnUpdate.style.display = 'none';
+      btnManual.style.display = '';
+    }
     document.getElementById('updateBanner').classList.add('active');
   }
 
-  function downloadUpdate() {
+  async function applyUpdate() {
+    if (!updateInfo || !updateInfo.downloadUrl) return;
+    const btn = document.getElementById('btnUpdate');
+    btn.textContent = t('updating');
+    btn.disabled = true;
+    try {
+      const result = await window.pywebview.api.apply_update(updateInfo.downloadUrl);
+      if (!result.success) {
+        showToast(t('updateFailed')(result.message), 'error');
+        btn.textContent = t('updateBtn');
+        btn.disabled = false;
+      }
+      // success 时 Python 会自动关闭窗口并重启
+    } catch (e) {
+      showToast(t('updateFailed')(e), 'error');
+      btn.textContent = t('updateBtn');
+      btn.disabled = false;
+    }
+  }
+
+  function openReleasePage() {
     if (updateInfo && updateInfo.url) {
       window.pywebview.api.open_url(updateInfo.url);
     }
@@ -1207,7 +1341,11 @@ HTML = r"""
     document.getElementById('updateBanner').classList.remove('active');
   }
 
-  window.addEventListener('pywebviewready', function() { applyTheme(); applyLang(); refreshData(); checkUpdate(); });
+  window.addEventListener('pywebviewready', function() {
+    applyTheme(); applyLang(); refreshData(); checkUpdate();
+    // 每 30 分钟检查一次更新
+    updateCheckTimer = setInterval(checkUpdate, 30 * 60 * 1000);
+  });
 </script>
 </body>
 </html>
@@ -1225,6 +1363,7 @@ def main():
         min_size=(800, 500),
         background_color='#1e1f2e',
     )
+    api.set_window(window)
     webview.start(debug=False)
 
 
