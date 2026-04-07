@@ -14,9 +14,9 @@
 
 ### Download
 
-**No Python needed. Just download the exe and double-click.**
+**No Python needed. Just grab the executable and double-click.**
 
-#### [>>> Download ShowPort.exe <<<](https://github.com/deeperxh/showport/releases/latest/download/ShowPort.exe)
+Get the latest `ShowPort.exe` from the [Releases page](https://github.com/deeperxh/showport/releases/latest).
 
 > Killing processes requires admin privileges. Right-click → **Run as administrator**.
 
@@ -76,7 +76,7 @@ Python + pywebview (Edge WebView2) + psutil + PyInstaller
 
 **不需要安装 Python，不需要任何环境，下载 exe 双击就能用。**
 
-#### [>>> 点击下载 ShowPort.exe <<<](https://github.com/deeperxh/showport/releases/latest/download/ShowPort.exe)
+到 [Releases 页面](https://github.com/deeperxh/showport/releases/latest)获取最新的 `ShowPort.exe`。
 
 > 杀进程需要管理员权限，建议**右键 → 以管理员身份运行**。
 
